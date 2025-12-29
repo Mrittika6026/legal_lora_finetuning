@@ -33,17 +33,30 @@ def build_training_arguments(cfg: AppConfig) -> TrainingArguments:
         optim=train_cfg.optim,
         remove_unused_columns=train_cfg.remove_unused_columns,
         report_to=train_cfg.report_to,
+        disable_tqdm=False,  # Explicitly enable progress bars
+        dataloader_pin_memory=True,
     )
 
 
 def run_training(cfg: AppConfig, resume_from_checkpoint: Optional[str] = None):
+    print("=" * 60)
+    print("Starting LoRA Training")
+    print("=" * 60)
+    
+    print("\n[1/4] Loading tokenizer...")
     tokenizer = load_tokenizer(cfg.tokenizer)
+    
+    print("\n[2/4] Loading and preparing dataset...")
     dataset = load_and_prepare_dataset(
         data_cfg=cfg.data,
         tokenizer=tokenizer,
         assistant_token=cfg.tokenizer.assistant_token,
     )
+    print(f"Train samples: {len(dataset['train'])}")
+    if 'validation' in dataset:
+        print(f"Val samples: {len(dataset['validation'])}")
 
+    print("\n[3/4] Loading model and applying LoRA...")
     model = load_base_model(cfg.model, cfg.quantization)
     model = wrap_with_lora(model, cfg.lora)
 
@@ -54,6 +67,11 @@ def run_training(cfg: AppConfig, resume_from_checkpoint: Optional[str] = None):
         label_pad_token_id=-100
     )
 
+    print("\n[4/4] Starting training...")
+    print(f"Output directory: {cfg.training.output_dir}")
+    print(f"Total steps per epoch: ~{len(dataset['train']) // (cfg.training.per_device_train_batch_size * cfg.training.gradient_accumulation_steps * 2)}")  # *2 for 2 GPUs
+    print("=" * 60)
+    
     training_args = build_training_arguments(cfg)
     trainer = Trainer(
         model=model,
@@ -65,6 +83,10 @@ def run_training(cfg: AppConfig, resume_from_checkpoint: Optional[str] = None):
     )
 
     trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    
+    print("\n" + "=" * 60)
+    print("Training completed! Saving adapter...")
+    print("=" * 60)
 
     output_dir = Path(cfg.training.output_dir) / "adapter"
     output_dir.mkdir(parents=True, exist_ok=True)

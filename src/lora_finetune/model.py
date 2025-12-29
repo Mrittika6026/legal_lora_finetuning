@@ -1,3 +1,4 @@
+import os
 import torch
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
@@ -17,15 +18,33 @@ def _make_bnb_config(cfg: QuantizationConfig) -> BitsAndBytesConfig:
 
 def load_base_model(model_cfg: ModelConfig, quant_cfg: QuantizationConfig):
     bnb_config = _make_bnb_config(quant_cfg)
+
+    # Handle multi-GPU DDP vs Single GPU
+    local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    is_ddp = local_rank != -1
+    
+    if is_ddp:
+        device_map = {"": local_rank}
+    else:
+        device_map = "auto"
+
     model = AutoModelForCausalLM.from_pretrained(
         model_cfg.name,
         quantization_config=bnb_config,
-        device_map="auto",
+        device_map=device_map,
         trust_remote_code=model_cfg.trust_remote_code
     )
-    if model_cfg.use_gradient_checkpointing:
+    
+    # Disable gradient checkpointing in DDP mode to avoid conflicts
+    # With 4-bit quantization, we have enough memory anyway
+    use_gradient_checkpointing = model_cfg.use_gradient_checkpointing and not is_ddp
+    if use_gradient_checkpointing:
         model.gradient_checkpointing_enable()
         model.enable_input_require_grads()
+    elif is_ddp and model_cfg.use_gradient_checkpointing:
+        print("Note: Gradient checkpointing disabled in DDP mode to avoid conflicts. "
+              "With 4-bit quantization, memory usage is already optimized.")
+    
     model.config.use_cache = model_cfg.use_cache
     return model
 

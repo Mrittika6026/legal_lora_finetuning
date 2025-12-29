@@ -33,12 +33,12 @@ lora:
     - "down_proj"
 
 data:
-  train_file: "lora_finetune/data/train_instruct.jsonl"
-  eval_file: "lora_finetune/data/val_instruct.jsonl"
-  max_length: 4096
+  train_file: "data/train_instruct.jsonl"
+  eval_file: "data/val_instruct.jsonl"
+  max_length: 2048  # Reduced from 4096 to fit in GPU memory with DDP
 
 training:
-  output_dir: "lora_finetune/outputs/qwen3-4b-lora"
+  output_dir: "outputs/qwen3-4b-lora"
   num_train_epochs: 2
   per_device_train_batch_size: 1
   per_device_eval_batch_size: 1
@@ -61,6 +61,6 @@ generation:
   temperature: 0.2
 
 inference:
-  adapter_dir: "lora_finetune/outputs/qwen3-4b-lora-adapter"
+  adapter_dir: "outputs/qwen3-4b-lora-adapter"
   system_prompt: "You are a helpful legal assistant."
 

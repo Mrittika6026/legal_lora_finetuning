@@ -3,6 +3,7 @@ from typing import Dict, Any
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from tqdm import tqdm
 
 from datasets import load_dataset, Dataset, DatasetDict
 
@@ -14,8 +15,13 @@ def _load_pretty_jsonl(path: str, max_records: Optional[int] = None) -> Dataset:
     """Parse pretty-printed JSON objects separated by blank lines, with optional early stop."""
     data: List[Dict[str, Any]] = []
     buffer: List[str] = []
-    with Path(path).open("r", encoding="utf-8") as f:
-        for line in f:
+    file_path = Path(path)
+    
+    # Count total lines for progress bar
+    total_lines = sum(1 for _ in file_path.open("r", encoding="utf-8"))
+    
+    with file_path.open("r", encoding="utf-8") as f:
+        for line in tqdm(f, total=total_lines, desc=f"Loading {file_path.name}", unit="lines"):
             if max_records is not None and len(data) >= max_records:
                 break
             if not line.strip() and not buffer:
@@ -57,9 +63,11 @@ def load_and_prepare_dataset(
         text = apply_chat_template(tokenizer, example["messages"])
         return {"text": text}
 
+    print("Formatting chat templates...")
     dataset = dataset.map(
         _format_chat,
-        remove_columns=dataset["train"].column_names
+        remove_columns=dataset["train"].column_names,
+        desc="Formatting chat"
     )
 
     def _tokenize(example):
@@ -70,10 +78,12 @@ def load_and_prepare_dataset(
             assistant_token=assistant_token,
         )
 
+    print("Tokenizing dataset...")
     dataset = dataset.map(
         _tokenize,
         batched=False,
-        remove_columns=["text"]
+        remove_columns=["text"],
+        desc="Tokenizing"
     )
     return dataset
 
