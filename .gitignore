@@ -1,0 +1,10 @@
+outputs/
+*.ckpt
+*.pt
+*.bin
+*.safetensors
+*.log
+wandb/
+cache/
+__pycache__/
+
