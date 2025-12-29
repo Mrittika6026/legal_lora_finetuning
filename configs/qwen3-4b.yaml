@@ -54,7 +54,17 @@ training:
   fp16: false
   optim: "paged_adamw_8bit"
   remove_unused_columns: false
-  report_to: "none"
+  report_to: "wandb"
+
+wandb:
+  project: "legal-lora-qwen3"
+  entity: null  # Optional: your W&B username/team
+  name: "qwen3-4b-lora-r32"  # Optional: run name
+  tags:
+    - "legal"
+    - "qwen3"
+    - "lora"
+  notes: "LoRA fine-tuning of Qwen3-4B on legal QA dataset"
 
 generation:
   max_new_tokens: 300

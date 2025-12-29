@@ -1,6 +1,12 @@
 from pathlib import Path
 from typing import Optional
 
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+
 from transformers import (
     DataCollatorForSeq2Seq,
     Trainer,
@@ -43,6 +49,55 @@ def run_training(cfg: AppConfig, resume_from_checkpoint: Optional[str] = None):
     print("Starting LoRA Training")
     print("=" * 60)
     
+    # Initialize W&B if configured
+    if cfg.wandb:
+        if not WANDB_AVAILABLE:
+            raise ImportError("wandb is not installed. Install it with: pip install wandb")
+        wandb.init(
+            project=cfg.wandb.project,
+            entity=cfg.wandb.entity,
+            name=cfg.wandb.name,
+            tags=cfg.wandb.tags or [],
+            notes=cfg.wandb.notes,
+            config={
+                "model": {
+                    "name": cfg.model.name,
+                    "use_gradient_checkpointing": cfg.model.use_gradient_checkpointing,
+                    "use_cache": cfg.model.use_cache,
+                },
+                "lora": {
+                    "r": cfg.lora.r,
+                    "lora_alpha": cfg.lora.lora_alpha,
+                    "lora_dropout": cfg.lora.lora_dropout,
+                    "bias": cfg.lora.bias,
+                    "target_modules": cfg.lora.target_modules,
+                },
+                "data": {
+                    "max_length": cfg.data.max_length,
+                    "train_file": cfg.data.train_file,
+                    "eval_file": cfg.data.eval_file,
+                },
+                "training": {
+                    "num_train_epochs": cfg.training.num_train_epochs,
+                    "per_device_train_batch_size": cfg.training.per_device_train_batch_size,
+                    "per_device_eval_batch_size": cfg.training.per_device_eval_batch_size,
+                    "gradient_accumulation_steps": cfg.training.gradient_accumulation_steps,
+                    "learning_rate": cfg.training.learning_rate,
+                    "warmup_ratio": cfg.training.warmup_ratio,
+                    "lr_scheduler_type": cfg.training.lr_scheduler_type,
+                    "bf16": cfg.training.bf16,
+                    "fp16": cfg.training.fp16,
+                    "optim": cfg.training.optim,
+                },
+                "quantization": {
+                    "load_in_4bit": cfg.quantization.load_in_4bit,
+                    "bnb_4bit_quant_type": cfg.quantization.bnb_4bit_quant_type,
+                    "bnb_4bit_compute_dtype": cfg.quantization.bnb_4bit_compute_dtype,
+                },
+            }
+        )
+        print(f"W&B initialized: project={cfg.wandb.project}, name={cfg.wandb.name or 'auto'}")
+    
     print("\n[1/4] Loading tokenizer...")
     tokenizer = load_tokenizer(cfg.tokenizer)
     
@@ -52,9 +107,20 @@ def run_training(cfg: AppConfig, resume_from_checkpoint: Optional[str] = None):
         tokenizer=tokenizer,
         assistant_token=cfg.tokenizer.assistant_token,
     )
-    print(f"Train samples: {len(dataset['train'])}")
+    train_size = len(dataset['train'])
+    val_size = len(dataset['validation']) if 'validation' in dataset else 0
+    print(f"Train samples: {train_size}")
     if 'validation' in dataset:
-        print(f"Val samples: {len(dataset['validation'])}")
+        print(f"Val samples: {val_size}")
+    
+    # Log dataset info to W&B
+    if cfg.wandb:
+        wandb.config.update({
+            "dataset": {
+                "train_samples": train_size,
+                "val_samples": val_size,
+            }
+        })
 
     print("\n[3/4] Loading model and applying LoRA...")
     model = load_base_model(cfg.model, cfg.quantization)
@@ -92,4 +158,15 @@ def run_training(cfg: AppConfig, resume_from_checkpoint: Optional[str] = None):
     output_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
+    
+    # Log model artifact to W&B if configured
+    if cfg.wandb:
+        artifact = wandb.Artifact("model-adapter", type="model")
+        artifact.add_dir(str(output_dir))
+        wandb.log_artifact(artifact)
+        print(f"Model adapter logged to W&B as artifact")
+    
+    # Finish W&B run
+    if cfg.wandb:
+        wandb.finish()
 

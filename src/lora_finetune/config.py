@@ -81,6 +81,15 @@ class InferenceConfig:
 
 
 @dataclass
+class WandbConfig:
+    project: str
+    entity: Optional[str] = None
+    name: Optional[str] = None
+    tags: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
+@dataclass
 class AppConfig:
     model: ModelConfig
     tokenizer: TokenizerConfig
@@ -90,6 +99,7 @@ class AppConfig:
     training: TrainingConfig
     generation: GenerationConfig
     inference: InferenceConfig
+    wandb: Optional[WandbConfig] = None
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
@@ -104,6 +114,9 @@ def _as_dataclass(cls, data: Dict[str, Any]):
 def load_config(path: str) -> AppConfig:
     cfg_path = Path(path)
     raw = _load_yaml(cfg_path)
+    wandb_config = None
+    if "wandb" in raw and raw["wandb"]:
+        wandb_config = _as_dataclass(WandbConfig, raw["wandb"])
     return AppConfig(
         model=_as_dataclass(ModelConfig, raw["model"]),
         tokenizer=_as_dataclass(TokenizerConfig, raw["tokenizer"]),
@@ -113,5 +126,6 @@ def load_config(path: str) -> AppConfig:
         training=_as_dataclass(TrainingConfig, raw["training"]),
         generation=_as_dataclass(GenerationConfig, raw.get("generation", {})),
         inference=_as_dataclass(InferenceConfig, raw["inference"]),
+        wandb=wandb_config,
     )
 
