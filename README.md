@@ -1,5 +1,18 @@
 LoRA fine-tune project scaffold for Qwen/Qwen3-4B (Hugging Face, PEFT, Accelerate, bitsandbytes). The code is modular so you can swap tokenization, data, or hyperparameters via YAML without touching the training loop.
 
+### Data Size 
+
+Train sample for LoRA: 10k QA pair - almost
+
+weight and Biases ; hyperparameter tuning - MLFLow
+
+Training: 5589
+Val: 294
+
+
+
+
+
 ### Layout
 - `configs/` – YAML configs (model, tokenizer, data, LoRA, training, generation).
 - `data/` – training/validation JSONL stored locally (`train_instruct.jsonl`, `val_instruct.jsonl`).
