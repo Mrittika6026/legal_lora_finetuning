@@ -1,13 +1,28 @@
 import os
 import torch
-from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 
 from .config import ModelConfig, QuantizationConfig, LoraConfigData
 
+# BitsAndBytesConfig is only needed when loading in 4-bit; keep the import optional
+try:
+    from transformers import BitsAndBytesConfig  # type: ignore
+except ImportError:
+    BitsAndBytesConfig = None  # type: ignore
 
-def _make_bnb_config(cfg: QuantizationConfig) -> BitsAndBytesConfig:
-    dtype = torch.bfloat16 if cfg.bnb_4bit_compute_dtype == "bfloat16" else torch.float16
+
+def _get_dtype(cfg: QuantizationConfig):
+    return torch.bfloat16 if cfg.bnb_4bit_compute_dtype == "bfloat16" else torch.float16
+
+
+def _make_bnb_config(cfg: QuantizationConfig):
+    if BitsAndBytesConfig is None:
+        raise ImportError(
+            "bitsandbytes is required when load_in_4bit=True. "
+            "Set load_in_4bit=False to run without bitsandbytes."
+        )
+    dtype = _get_dtype(cfg)
     return BitsAndBytesConfig(
         load_in_4bit=cfg.load_in_4bit,
         bnb_4bit_quant_type=cfg.bnb_4bit_quant_type,
@@ -17,7 +32,7 @@ def _make_bnb_config(cfg: QuantizationConfig) -> BitsAndBytesConfig:
 
 
 def load_base_model(model_cfg: ModelConfig, quant_cfg: QuantizationConfig):
-    bnb_config = _make_bnb_config(quant_cfg)
+    dtype = _get_dtype(quant_cfg)
 
     # Handle multi-GPU DDP vs Single GPU
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
@@ -28,12 +43,21 @@ def load_base_model(model_cfg: ModelConfig, quant_cfg: QuantizationConfig):
     else:
         device_map = "auto"
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_cfg.name,
-        quantization_config=bnb_config,
-        device_map=device_map,
-        trust_remote_code=model_cfg.trust_remote_code
-    )
+    if quant_cfg.load_in_4bit:
+        quantization_config = _make_bnb_config(quant_cfg)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_cfg.name,
+            quantization_config=quantization_config,
+            device_map=device_map,
+            trust_remote_code=model_cfg.trust_remote_code
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_cfg.name,
+            torch_dtype=dtype,
+            device_map=device_map,
+            trust_remote_code=model_cfg.trust_remote_code
+        )
     
     # Disable gradient checkpointing in DDP mode to avoid conflicts
     # With 4-bit quantization, we have enough memory anyway

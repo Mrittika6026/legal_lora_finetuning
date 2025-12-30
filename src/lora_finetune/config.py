@@ -24,7 +24,7 @@ class TokenizerConfig:
 
 @dataclass
 class QuantizationConfig:
-    load_in_4bit: bool = True
+    load_in_4bit: bool = False
     bnb_4bit_quant_type: str = "nf4"
     bnb_4bit_compute_dtype: str = "bfloat16"
     bnb_4bit_use_double_quant: bool = True
@@ -63,7 +63,7 @@ class TrainingConfig:
     lr_scheduler_type: str = "cosine"
     bf16: bool = True
     fp16: bool = False
-    optim: str = "paged_adamw_8bit"
+    optim: str = "adamw_torch"
     remove_unused_columns: bool = False
     report_to: str = "none"
 

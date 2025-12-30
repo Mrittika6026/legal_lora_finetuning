@@ -12,7 +12,7 @@ tokenizer:
   assistant_token: "<|assistant|>"
 
 quantization:
-  load_in_4bit: true
+  load_in_4bit: false
   bnb_4bit_quant_type: "nf4"
   bnb_4bit_compute_dtype: "bfloat16"
   bnb_4bit_use_double_quant: true
@@ -52,7 +52,7 @@ training:
   lr_scheduler_type: "cosine"
   bf16: true
   fp16: false
-  optim: "paged_adamw_8bit"
+  optim: "adamw_torch"
   remove_unused_columns: false
   report_to: "wandb"
 
