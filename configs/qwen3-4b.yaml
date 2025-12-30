@@ -35,7 +35,7 @@ lora:
 data:
   train_file: "data/train_instruct.jsonl"
   eval_file: "data/val_instruct.jsonl"
-  max_length: 2048  # Reduced from 4096 to fit in GPU memory with DDP
+  max_length: 2048  # Optimized for 24GB VRAM (3090)
 
 training:
   output_dir: "outputs/qwen3-4b-lora"
