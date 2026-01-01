@@ -105,7 +105,6 @@ def run_training(cfg: AppConfig, resume_from_checkpoint: Optional[str] = None):
     dataset = load_and_prepare_dataset(
         data_cfg=cfg.data,
         tokenizer=tokenizer,
-        assistant_token=cfg.tokenizer.assistant_token,
     )
     train_size = len(dataset['train'])
     val_size = len(dataset['validation']) if 'validation' in dataset else 0

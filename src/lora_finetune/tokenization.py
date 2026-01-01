@@ -21,11 +21,12 @@ def load_tokenizer(cfg: TokenizerConfig) -> PreTrainedTokenizerBase:
 def apply_chat_template(
     tokenizer: PreTrainedTokenizerBase,
     messages: List[Dict[str, Any]],
+    add_generation_prompt: bool = False,
 ) -> str:
     return tokenizer.apply_chat_template(
         messages,
         tokenize=False,
-        add_generation_prompt=False
+        add_generation_prompt=add_generation_prompt
     )
 
 

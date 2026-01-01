@@ -1,14 +1,9 @@
-from typing import Dict, Any
+from typing import Any, Dict, List, Optional
 
-import json
-from pathlib import Path
-from typing import Dict, Any, List, Optional
-from tqdm import tqdm
-
-from datasets import load_dataset, Dataset, DatasetDict
+from datasets import load_dataset, DatasetDict
 
 from .config import DataConfig
-from .tokenization import apply_chat_template, tokenize_with_mask
+from .tokenization import apply_chat_template
 
 
 # def _load_pretty_jsonl(path: str, max_records: Optional[int] = None) -> Dataset:
@@ -88,36 +83,69 @@ def _safe_load_dataset(data_cfg: DataConfig, sample_size: Optional[int] = None) 
 def load_and_prepare_dataset(
     data_cfg: DataConfig,
     tokenizer,
-    assistant_token: str,
     sample_size: Optional[int] = None,
 ) -> Dict[str, Any]:
     dataset = _safe_load_dataset(data_cfg, sample_size=sample_size)
 
-    def _format_chat(example):
-        text = apply_chat_template(tokenizer, example["messages"])
-        return {"text": text}
-
-    print("Formatting chat templates...")
-    dataset = dataset.map(
-        _format_chat,
-        remove_columns=dataset["train"].column_names,
-        desc="Formatting chat"
-    )
-
-    def _tokenize(example):
-        return tokenize_with_mask(
-            tokenizer=tokenizer,
-            text=example["text"],
-            max_length=data_cfg.max_length,
-            assistant_token=assistant_token,
-        )
-
     print("Tokenizing dataset...")
     dataset = dataset.map(
-        _tokenize,
+        lambda example: _tokenize_chat_example(
+            example=example,
+            tokenizer=tokenizer,
+            max_length=data_cfg.max_length,
+        ),
         batched=False,
-        remove_columns=["text"],
-        desc="Tokenizing"
+        remove_columns=dataset["train"].column_names,
+        desc="Tokenizing",
     )
     return dataset
+
+
+def _tokenize_chat_example(
+    example: Dict[str, Any],
+    tokenizer,
+    max_length: int,
+) -> Dict[str, List[int]]:
+    """
+    Build input_ids/labels so only the final assistant message contributes to loss.
+    """
+    messages = example["messages"]
+
+    # Full conversation including the assistant reply
+    full_text = apply_chat_template(
+        tokenizer=tokenizer,
+        messages=messages,
+        add_generation_prompt=False,
+    )
+    full_tokens = tokenizer(
+        full_text,
+        truncation=True,
+        max_length=max_length,
+        padding=False,
+        return_attention_mask=True,
+    )
+
+    # Conversation up to (but not including) the final assistant content.
+    prompt_text = apply_chat_template(
+        tokenizer=tokenizer,
+        messages=messages[:-1],
+        add_generation_prompt=True,
+    )
+    prompt_ids = tokenizer(
+        prompt_text,
+        truncation=True,
+        max_length=max_length,
+        padding=False,
+        return_attention_mask=False,
+    )["input_ids"]
+
+    labels = full_tokens["input_ids"].copy()
+    prompt_len = min(len(prompt_ids), len(labels))
+    if prompt_len > 0:
+        labels[:prompt_len] = [-100] * prompt_len
+    if tokenizer.eos_token_id is not None and labels and labels[-1] == tokenizer.eos_token_id:
+        labels[-1] = -100
+
+    full_tokens["labels"] = labels
+    return full_tokens
 
