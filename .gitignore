@@ -7,4 +7,8 @@ outputs/
 wandb/
 cache/
 __pycache__/
+data/
 
+
+data/train_instruct.jsonl
+initial_output/qwen3-4b-lora.zip
