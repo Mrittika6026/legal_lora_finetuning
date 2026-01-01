@@ -35,7 +35,7 @@ lora:
 data:
   train_file: "data/train_instruct.jsonl"
   eval_file: "data/val_instruct.jsonl"
-  max_length: 2048  # Optimized for 24GB VRAM (3090)
+  max_length: 4096  # Increased context length
 
 training:
   output_dir: "outputs/qwen3-4b-lora"
